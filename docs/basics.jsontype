@@ -1,0 +1,81 @@
+package com.giyeok.tsuite.bitupdb.upbit
+
+import "basic_types.jsontype"
+
+type LocalDateTime = java.time.LocalDateTime(com.giyeok.tsuite.util.gson.LocalDateTimeConverter)
+type BigDecimal = java.util.BigDecimal
+
+UpbitMinuteCandle {
+  "market": UpbitMarketBySymbol,
+  "candle_date_time_utc": LocalDateTime,
+  "candle_date_time_kst": LocalDateTime,
+  "opening_price" as open: BigDecimal,
+  "high_price" as high: BigDecimal,
+  "low_price" as low: BigDecimal,
+  "trade_price" as close: BigDecimal,
+  "timestamp": Long,
+  "candle_acc_trade_price": BigDecimal,
+  "candle_acc_trade_volume": BigDecimal,
+  "unit": Double,
+}
+
+UpbitOrderBook {
+  "market" | "cd": UpbitMarket,
+  "timestamp" | "tms": Long,
+  "total_ask_size" | "tas": BigDecimal,
+  "total_bid_size" | "tbs": BigDecimal,
+  "orderbook_units" | "obu": [OrderBookEntry {
+    "ask_price" | "ap": BigDecimal,
+    "ask_size" | "as": BigDecimal,
+    "bid_price" | "bp": BigDecimal,
+    "bid_size" | "bs": BigDecimal,
+  }],
+}
+
+UpbitOrderBook::longForm {
+  "market": UpbitMarket,
+  "timestamp": Long,
+  "total_ask_size": BigDecimal,
+  "total_bid_size": BigDecimal,
+  "orderbook_units": [OrderBookEntry {
+    "ask_price": BigDecimal,
+    "ask_size": BigDecimal,
+    "bid_price": BigDecimal,
+    "bid_size": BigDecimal,
+  }],
+}
+
+
+optional var "market" | "cd" as market: UpbitMarket,
+let market from "market" | "cd": UpbitMarket,
+
+
+// optional? var? fieldName (as Name)? : Type
+// let? Name from fieldName : Type
+// let? Name = expr
+// fieldName = strLiteral (| strLiteral)*
+
+// Type = ClassDef | ClassReadDef | LongName | ClassReadName | ObjectDef | ConverterDef
+// ClassReadName = Name "::" Name
+// let? Name = strLiteral (| strLiteral)* : optional? var? type
+//             strLiteral (| strLiteral)* : optional? var? type
+// let? Name = expr
+UpbitOrderBook::shortForm {
+  "cd" as market: UpbitMarket,
+  "tms": Long,
+  "tas": BigDecimal,
+  "tbs": BigDecimal,
+  "obu": [OrderBookEntry {
+    "ap": BigDecimal,
+    "as": BigDecimal,
+    "bp": BigDecimal,
+    "bs": BigDecimal,
+  }],
+  "obu": [OrderBookEntry],
+  "obu": [OrderBookEntry::shortForm],
+}
+
+
+MapType {
+  ... as rest: ValueType
+}

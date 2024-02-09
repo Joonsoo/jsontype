@@ -1,0 +1,12 @@
+
+// TODO
+Example {
+  let _ = "qwe": BigDecimal,
+  let x = "x" | "xx": BigDecimal,
+  let y = "y" | "yy": BigDecimal,
+  assd = DataClass(x=x,y=y),
+  "a": optional Long,
+  "b": var Long,
+  "c": optional var Long,
+  ... as rest
+}

@@ -1,0 +1,66 @@
+import file
+import git("https://github.com/Joonsoo/sugarproto.git") as sugarproto
+import maven
+import jvm
+from bibix.plugins import java
+from bibix.plugins import ktjvm
+from bibix.plugins import protobuf
+from bibix.plugins import grpc
+from bibix.plugins import javafx
+from bibix.plugins import jar
+import git("https://github.com/Joonsoo/jparser.git") as jparser
+
+protobufVersion = "3.25.1"
+var protobuf.protobufVersion = protobufVersion
+grpcVersion = "1.60.0"
+var grpc.grpcVersion = grpcVersion
+ktxCoroutinesVersion = "1.7.0"
+
+junit5Version = "5.8.2"
+truthVersion = "1.1.3"
+testDeps = [
+  maven.artifact("org.junit.jupiter", "junit-jupiter-api", junit5Version),
+  maven.artifact("org.junit.jupiter", "junit-jupiter-engine", junit5Version),
+  maven.artifact("com.google.truth", "truth", truthVersion),
+  maven.artifact("com.google.truth.extensions", "truth-java8-extension", truthVersion),
+  maven.artifact("com.google.truth.extensions", "truth-proto-extension", truthVersion),
+]
+
+parserGen = jparser.genKtAstMgroup2(
+  cdgFile = "grammar/jsontype.cdg",
+  astifierClassName = "com.giyeok.jsontype.JsonTypeAst",
+  parserDataFileName = "jsontype-mg2-parserdata.pb",
+)
+
+action generateParser {
+  file.clearDirectory("generated/jparser/kotlin")
+  file.clearDirectory("generated/jparser/resources")
+
+  file.copyDirectory(parserGen.srcsRoot, "generated/jparser/kotlin")
+  file.copyFile(parserGen.parserData, "generated/jparser/resources")
+}
+
+parser = ktjvm.library(
+  srcs = glob("generated/jparser/kotlin/**.kt"),
+  deps = [jparser.ktparser.main],
+  resources = [
+    "generated/jparser/resources/jsontype-mg2-parserdata.pb",
+  ]
+)
+
+main = ktjvm.library(
+  srcs = glob("main/kotlin/**.kt"),
+  deps = [
+    parser,
+  ],
+)
+
+test = ktjvm.library(
+  srcs = glob("test/kotlin/**.kt"),
+  deps = [
+    main,
+    ...testDeps,
+    maven.artifact("com.google.code.gson", "gson", "2.10.1"),
+  ],
+)
+
