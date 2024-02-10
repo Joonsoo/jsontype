@@ -74,6 +74,6 @@ bibixPlugin {
 def generateJsonClass(
   schema: file,
   fileName: string = "JsonClass.kt",
-): file = bibixPlugin.impl:com.giyeok.jsontype.bibix.PluginImpl
+): directory = bibixPlugin.impl:com.giyeok.jsontype.bibix.PluginImpl
 
 bibixPluginTest = generateJsonClass("test/data/examples.jsontype")

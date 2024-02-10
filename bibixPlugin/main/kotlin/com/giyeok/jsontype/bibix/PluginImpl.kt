@@ -2,6 +2,7 @@ package com.giyeok.jsontype.bibix
 
 import com.giyeok.bibix.base.BibixValue
 import com.giyeok.bibix.base.BuildContext
+import com.giyeok.bibix.base.DirectoryValue
 import com.giyeok.bibix.base.FileValue
 import com.giyeok.jsontype.JsonClassCodeGen
 import com.giyeok.jsontype.JsonTypeCompiler
@@ -15,10 +16,11 @@ class PluginImpl {
   fun build(ctx: BuildContext): BibixValue {
     val parsed = JsonTypeParser.parse(ctx.getFileField("schema").readText())
 
+    val objDir = ctx.clearDestDirectory()
     val destDir = if (parsed.pkg != null) {
-      parsed.pkg!!.name.names.fold(ctx.clearDestDirectory()) { m, i -> m.resolve(i.name) }
+      parsed.pkg!!.name.names.fold(objDir) { m, i -> m.resolve(i.name) }
     } else {
-      ctx.clearDestDirectory()
+      objDir
     }
     destDir.createDirectories()
 
@@ -48,6 +50,6 @@ class PluginImpl {
     val destFile = destDir.resolve(ctx.getStringArg("fileName"))
     destFile.writeText(writer.toString())
 
-    return FileValue(destFile)
+    return DirectoryValue(objDir)
   }
 }
