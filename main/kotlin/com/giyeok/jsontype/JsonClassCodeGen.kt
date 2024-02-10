@@ -198,7 +198,7 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     "${clsName}${readerName.replaceFirstChar { it.uppercase() }}Adapter"
 
   fun generateValueReader(type: FieldType): String = when (type) {
-    BooleanType -> "reader.nextBool()"
+    BooleanType -> "reader.nextBoolean()"
     IntType -> "reader.nextInt()"
     LongType -> "reader.nextLong()"
     BigIntegerType -> "gson.fromJson(reader, BigInteger::class.java)"
