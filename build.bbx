@@ -64,3 +64,16 @@ test = ktjvm.library(
   ],
 )
 
+bibixPlugin {
+  impl = ktjvm.library(
+    srcs = glob("bibixPlugin/main/kotlin/**.kt"),
+    deps = [main, bibix.base],
+  )
+}
+
+def generateJsonClass(
+  schema: file,
+  fileName: string = "JsonClass.kt",
+): file = bibixPlugin.impl:com.giyeok.jsontype.bibix.PluginImpl
+
+bibixPluginTest = generateJsonClass("test/data/examples.jsontype")

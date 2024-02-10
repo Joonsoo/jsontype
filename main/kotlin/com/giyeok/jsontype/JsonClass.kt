@@ -41,11 +41,14 @@ data class JsonObjectField(
 
 sealed class FieldType
 
+data object BooleanType: FieldType()
 data object IntType: FieldType()
 data object LongType: FieldType()
 data object BigIntegerType: FieldType()
 data object BigDecimalType: FieldType()
 data object StringType: FieldType()
+data object FloatType: FieldType()
+data object DoubleType: FieldType()
 data class JsonClassType(val className: String, val readerName: String): FieldType()
 data class ArrayType(val elemType: FieldType): FieldType()
 data class JvmType(val qualifiedName: String): FieldType() {

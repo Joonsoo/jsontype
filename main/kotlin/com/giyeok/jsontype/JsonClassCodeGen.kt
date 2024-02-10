@@ -32,6 +32,25 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     val typeAdapterName = typeAdapterNameOf(cls.name, readerName)
     writer.writeLine("class $typeAdapterName(val gson: Gson): TypeAdapter<${cls.name}>() {")
     writer.indent {
+      writer.writeLine("companion object {")
+      writer.indent {
+        writer.writeLine("val FACTORY = object: TypeAdapterFactory {")
+        writer.indent {
+          writer.writeLine("override fun <T: Any> create(gson: Gson, type: TypeToken<T>): TypeAdapter<T>? {")
+          writer.indent {
+            writer.writeLine("if (type.rawType == ${cls.name}::class.java) {")
+            writer.indent {
+              writer.writeLine("return $typeAdapterName(gson) as TypeAdapter<T>")
+            }
+            writer.writeLine("}")
+            writer.writeLine("return null")
+          }
+          writer.writeLine("}")
+        }
+        writer.writeLine("}")
+      }
+      writer.writeLine("}")
+      writer.writeLine()
       writer.writeLine("override fun read(reader: JsonReader): ${cls.name} {")
       writer.indent {
         cls.fields.forEach { field ->
@@ -124,14 +143,17 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
   }
 
   fun typeAdapterNameOf(clsName: String, readerName: String): String =
-    "${clsName}${readerName?.replaceFirstChar { it.uppercase() }}Adapter"
+    "${clsName}${readerName.replaceFirstChar { it.uppercase() }}Adapter"
 
   fun generateValueReader(type: FieldType): String = when (type) {
+    BooleanType -> "reader.nextBool()"
     IntType -> "reader.nextInt()"
     LongType -> "reader.nextLong()"
     BigIntegerType -> "gson.fromJson(reader, BigInteger::class.java)"
     BigDecimalType -> "gson.fromJson(reader, BigDecimal::class.java)"
     StringType -> "reader.nextString()"
+    FloatType -> "reader.nextFloat()"
+    DoubleType -> "reader.nextDouble()"
 
     is ArrayType -> {
       varIdCounter += 1
@@ -160,9 +182,12 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
   }
 
   fun generateFieldTypeStr(type: FieldType): String = when (type) {
+    BooleanType -> "Boolean"
     IntType -> "Int"
     LongType -> "Long"
     StringType -> "String"
+    FloatType -> "Float"
+    DoubleType -> "Double"
     BigIntegerType -> {
       writer.addImport(KtImport("java.math.BigInteger"))
       "BigInteger"
@@ -185,9 +210,12 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
   }
 
   fun generateBuilderTypeStr(type: FieldType): String = when (type) {
+    BooleanType -> "Boolean"
     IntType -> "Int"
     LongType -> "Long"
     StringType -> "String"
+    FloatType -> "Float"
+    DoubleType -> "Double"
     BigIntegerType -> {
       writer.addImport(KtImport("java.math.BigInteger"))
       "BigInteger"
@@ -235,9 +263,12 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
 
   fun generateValueWriter(value: String, type: FieldType) {
     when (type) {
+      BooleanType,
       IntType,
       LongType,
-      StringType -> writer.writeLine("writer.value($value)")
+      StringType,
+      FloatType,
+      DoubleType -> writer.writeLine("writer.value($value)")
 
       BigIntegerType -> {
         writer.addImport(KtImport("java.math.BigInteger"))

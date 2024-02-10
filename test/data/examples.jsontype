@@ -1,0 +1,76 @@
+
+type CoinoneAsset = com.giyeok.tsuite.base.market.coinone.CoinoneAsset
+
+CoinoneMinuteCandle {
+  result: String,
+  error_code: String,
+  is_last: Boolean,
+  chart: [CoinoneMinuteCandleEntry {
+    timestamp: Long,
+    open: BigDecimal,
+    high: BigDecimal,
+    low: BigDecimal,
+    close: BigDecimal,
+    target_volume: BigDecimal,
+    quote_volume: BigDecimal,
+  }]
+}
+
+CoinoneOrderBook {
+  result: String,
+  error_code: String,
+  timestamp: Long,
+  id: Long,
+  quote_currency: CoinoneAsset,
+  target_currency: CoinoneAsset,
+  order_book_unit: Double,
+  bids: [CoinoneOrderBookEntry {
+    price: BigDecimal,
+    qty as size: BigDecimal,
+  }],
+  asks: [CoinoneOrderBookEntry]
+}
+
+
+type UpbitMarket = com.giyeok.tsuite.base.market.upbit.UpbitMarket
+type LocalDateTime = java.time.LocalDateTime
+
+UpbitMinuteCandle {
+  market: UpbitMarket,
+  candle_date_time_utc: LocalDateTime,
+  candle_date_time_kst: LocalDateTime,
+  opening_price as open: BigDecimal,
+  high_price as high: BigDecimal,
+  low_price as low: BigDecimal,
+  trade_price as close: BigDecimal,
+  timestamp: Long,
+  candle_acc_trade_price: BigDecimal,
+  candle_acc_trade_volume: BigDecimal,
+  unit: Double,
+}
+
+UpbitOrderBook {
+  market: UpbitMarket,
+  timestamp: Long,
+  total_ask_size: BigDecimal,
+  total_bid_size: BigDecimal,
+  orderbook_units as entries: [UpbitOrderBookEntry {
+    ask_price: BigDecimal,
+    ask_size: BigDecimal,
+    bid_price: BigDecimal,
+    bid_size: BigDecimal,
+  }]
+}
+
+UpbitOrderBook::shortForm {
+  cd as market: UpbitMarket,
+  tms as timestamp: Long,
+  tas as totalAskSize: BigDecimal,
+  tbs as totalBidSize: BigDecimal,
+  obu as orderbookUnits: [UpbitOrderBookEntry::shortForm {
+    ap as askPrice: BigDecimal,
+    `as` as askSize: BigDecimal,
+    bp as bidPrice: BigDecimal,
+    bs as bidSize: BigDecimal,
+  }]
+}

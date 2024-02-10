@@ -40,6 +40,7 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
     check(def.name.name !in classes) { "Duplicate class def ${def.name.name}" }
     val compiled = JsonClassCompiler().compile(def)
     classes[def.name.name] = compiled
+    typeDefs[def.name.name] = JsonClassType(def.name.name, "")
     return compiled
   }
 
@@ -120,11 +121,14 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
     fun compileType(type: JsonTypeAst.Type): FieldType = when (type) {
       is JsonTypeAst.LongName ->
         when (val name = type.names.single().name) {
+          "Boolean" -> BooleanType
           "Int" -> IntType
           "Long" -> LongType
           "BigInteger" -> BigIntegerType
           "BigDecimal" -> BigDecimalType
           "String" -> StringType
+          "Float" -> FloatType
+          "Double" -> DoubleType
           else -> {
             check(name in typeDefs) { "Unknown name: $name" }
             typeDefs.getValue(name)
@@ -149,15 +153,15 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
       is JsonTypeAst.ObjDef -> throw AssertionError()
     }
 
+    fun String.toLowerCamelCase(): String {
+      val tokens = this.split('_')
+      return (tokens.take(1) + tokens.drop(1)
+        .map { tok -> tok.replaceFirstChar { it.uppercase() } }).joinToString("")
+    }
+
     fun JsonTypeAst.ObjFieldName.toKtName(): String = when (this) {
-      is JsonTypeAst.Name -> this.name
-      is JsonTypeAst.StringLiteral -> {
-        val name = this.value()
-        // TODO name snake_case -> lowerCamelCase
-        val tokens = name.split('_')
-        (tokens.take(1) + tokens.drop(1)
-          .map { tok -> tok.replaceFirstChar { it.uppercase() } }).joinToString("")
-      }
+      is JsonTypeAst.Name -> this.name.toLowerCamelCase()
+      is JsonTypeAst.StringLiteral -> this.value().toLowerCamelCase()
     }
   }
 }

@@ -1,5 +1,6 @@
 package com.giyeok.jsontype
 
+import com.giyeok.jsontype.util.KotlinCodeWriter
 import org.junit.jupiter.api.Test
 
 class JsonTypeParserTest {
@@ -77,13 +78,15 @@ class JsonTypeParserTest {
   fun test2() {
     val parsed = JsonTypeParser.parse(
       """
+        type CoinoneAsset = com.giyeok.tsuite.CoinoneAsset
+        
         CoinoneOrderBook {
           result: String,
           error_code: String,
           timestamp: Long,
           id: String,
-          quote_currency: CoinoneAsset.byCode,
-          target_currency: CoinoneAsset.byCode,
+          quote_currency: CoinoneAsset,
+          target_currency: CoinoneAsset,
           order_book_unit: BigDecimal,
           bids: [OrderBookEntry {
             price: BigDecimal,
@@ -109,5 +112,13 @@ class JsonTypeParserTest {
       """.trimIndent()
     )
     println(parsed)
+    val compiler = JsonTypeCompiler(null)
+    compiler.compile(parsed.defs)
+    val writer = KotlinCodeWriter()
+    compiler.classes.forEach { (_, cls) ->
+      JsonClassCodeGen(writer).generateClass(cls)
+      JsonClassCodeGen(writer).generateClassReader(cls, "", cls.defaultReader)
+    }
+    println(writer.toString())
   }
 }
