@@ -1,2 +1,0 @@
-
-type LocalDateTime = java.time.LocalDateTime(com.giyeok.tsuite.util.gson.LocalDateTimeConverter)

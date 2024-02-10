@@ -1,8 +1,8 @@
-package com.giyeok.tsuite.bitupdb.upbit
+package com.giyeok.jsontype.test
 
 import "basic_types.jsontype"
 
-type LocalDateTime = java.time.LocalDateTime(com.giyeok.tsuite.util.gson.LocalDateTimeConverter)
+type LocalDateTime = java.time.LocalDateTime(com.giyeok.jsontype.test.util.gson.LocalDateTimeConverter)
 type BigDecimal = java.util.BigDecimal
 
 UpbitMinuteCandle {

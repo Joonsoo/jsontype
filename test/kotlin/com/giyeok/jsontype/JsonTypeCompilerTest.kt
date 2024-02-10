@@ -27,7 +27,7 @@ class JsonTypeCompilerTest {
   fun test() {
     val parsed = JsonTypeParser.parse(
       """
-        type UpbitMarket = com.giyeok.tsuite.base.UpbitMarket
+        type UpbitMarket = com.giyeok.jsontype.tests.UpbitMarket
         
         UpbitMinuteCandle {
           market | mkt: UpbitMarket,

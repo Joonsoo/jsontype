@@ -1,6 +1,6 @@
 package com.giyeok.jsontype.tests
 
-type CoinoneAsset = com.giyeok.tsuite.base.market.coinone.CoinoneAsset
+type CoinoneAsset = com.giyeok.jsontype.tests.CoinoneAsset
 
 CoinoneMinuteCandle {
   result: String,
@@ -33,7 +33,7 @@ CoinoneOrderBook {
 }
 
 
-type UpbitMarket = com.giyeok.tsuite.base.market.upbit.UpbitMarket
+type UpbitMarket = com.giyeok.jsontype.tests.UpbitMarket
 type LocalDateTime = java.time.LocalDateTime
 
 UpbitMinuteCandle {

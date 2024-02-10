@@ -78,7 +78,7 @@ class JsonTypeParserTest {
   fun test2() {
     val parsed = JsonTypeParser.parse(
       """
-        type CoinoneAsset = com.giyeok.tsuite.CoinoneAsset
+        type CoinoneAsset = com.giyeok.jsontype.tests.CoinoneAsset
         
         CoinoneOrderBook {
           result: String,
