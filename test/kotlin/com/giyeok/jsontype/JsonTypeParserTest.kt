@@ -121,4 +121,29 @@ class JsonTypeParserTest {
     }
     println(writer.toString())
   }
+
+  @Test
+  fun test3() {
+    val parsed = JsonTypeParser.parse(
+      """
+        BinanceMinuteCandle [
+          ...as charts: BinanceCandleEntry [
+            openTime: Long,
+            open: BigDecimal,
+            high: BigDecimal,
+            low: BigDecimal,
+            close: BigDecimal,
+            volume: BigDecimal,
+            closeTime: Long,
+            quoteVolume: BigDecimal,
+            tradeCount: Long,
+            takerBaseVolume: BigDecimal,
+            takerQuoteVolume: BigDecimal,
+            _,
+          ]
+        ]
+      """.trimIndent()
+    )
+    println(parsed)
+  }
 }

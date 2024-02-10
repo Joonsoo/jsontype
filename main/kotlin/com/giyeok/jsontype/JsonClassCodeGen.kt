@@ -2,7 +2,6 @@ package com.giyeok.jsontype
 
 import com.giyeok.jsontype.util.KotlinCodeWriter
 import com.giyeok.jsontype.util.KtImport
-import java.math.BigDecimal
 
 class JsonClassCodeGen(val writer: KotlinCodeWriter) {
   private var varIdCounter = 0
@@ -10,7 +9,7 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
   fun generateClass(cls: JsonClass) {
     writer.writeLine("data class ${cls.name}(")
     writer.indent {
-      cls.fields.forEach { field ->
+      (cls.fields).forEach { field ->
         val valOrVar = if (field.isVar) "var" else "val"
         val type0 = generateFieldTypeStr(field.type)
         val type = if (field.isOptional) "$type0?" else type0
@@ -23,7 +22,7 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
   fun generateClassReader(
     cls: JsonClass,
     readerName: String,
-    body: JsonObject,
+    body: JsonReader,
   ) {
     writer.addImport(KtImport("com.google.gson.Gson"))
     writer.addImport(KtImport("com.google.gson.TypeAdapter"))
@@ -31,6 +30,8 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     writer.addImport(KtImport("com.google.gson.stream.JsonWriter"))
     val typeAdapterName = typeAdapterNameOf(cls.name, readerName)
     writer.writeLine("class $typeAdapterName(val gson: Gson): TypeAdapter<${cls.name}>() {")
+    writer.addImport(KtImport("com.google.gson.TypeAdapterFactory"))
+    writer.addImport(KtImport("com.google.gson.reflect.TypeToken"))
     writer.indent {
       writer.writeLine("companion object {")
       writer.indent {
@@ -54,18 +55,30 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
       writer.writeLine("override fun read(reader: JsonReader): ${cls.name} {")
       writer.indent {
         cls.fields.forEach { field ->
-          writer.writeLine("var _${field.kotlinName}: ${generateFieldTypeStr(field.type)}? = null")
-          if (field.isOptional) {
-            writer.writeLine("var set_${field.kotlinName}: Boolean = false")
+          if (field.isRest) {
+            val fieldInit = when (field.type) {
+              is StringToValueType ->
+                "mutableMapOf<String, ${generateFieldTypeStr(field.type.valueType)}>()"
+
+              is ArrayType ->
+                "mutableListOf<${generateFieldTypeStr(field.type.elemType)}>()"
+
+              else -> throw AssertionError()
+            }
+            writer.writeLine("val _${field.kotlinName} = $fieldInit")
+          } else {
+            writer.writeLine("var _${field.kotlinName}: ${generateFieldTypeStr(field.type)}? = null")
+            if (field.isOptional) {
+              writer.writeLine("var set_${field.kotlinName}: Boolean = false")
+            }
           }
         }
-        writer.writeLine()
-        generateObjectReader(body)
-        writer.writeLine()
+
+        generateReader(body)
         writer.writeLine("return ${cls.name}(")
         writer.indent {
           cls.fields.forEach { field ->
-            if (field.isOptional) {
+            if (field.isOptional || field.isRest) {
               writer.writeLine("${field.kotlinName} = _${field.kotlinName},")
             } else {
               writer.writeLine("${field.kotlinName} = checkNotNull(_${field.kotlinName}) { \"required field not set: ${field.kotlinName}\" },")
@@ -78,14 +91,14 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
       writer.writeLine()
       writer.writeLine("override fun write(writer: JsonWriter, value: ${cls.name}) {")
       writer.indent {
-        generateObjectWriter(body)
+        generateWriter(body)
       }
       writer.writeLine("}")
     }
     writer.writeLine("}")
   }
 
-  fun generateObjectReader(obj: JsonObject) {
+  fun generateObjectReader(obj: JsonObjectReader) {
     varIdCounter += 1
     val nameVar = "name$varIdCounter"
 
@@ -95,8 +108,7 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
       writer.writeLine("when (val $nameVar = reader.nextName()) {")
       writer.indent {
         obj.fields.forEach { field ->
-          // TODO escape
-          writer.writeLine("${field.jsonNames.joinToString { "\"$it\"" }} -> {")
+          writer.writeLine("${field.jsonNames.joinToString { strLiteral(it) }} -> {")
           writer.indent {
             generateFieldReader(field)
           }
@@ -104,9 +116,9 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
         }
 
         obj.subObjs.forEach { subObj ->
-          writer.writeLine("${subObj.jsonNames.joinToString { "\"$it\"" }} -> {")
+          writer.writeLine("${subObj.jsonNames.joinToString { strLiteral(it) }} -> {")
           writer.indent {
-            generateObjectReader(subObj.subObj)
+            generateReader(subObj.sub)
           }
           writer.writeLine("}")
         }
@@ -116,7 +128,15 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
           if (obj.rest == null) {
             writer.writeLine("throw IllegalStateException(\"Unknown field: \$$nameVar\")")
           } else {
-            TODO()
+            if (obj.rest.name == null && obj.rest.fieldType == null) {
+              // 그냥 있어도 OK인 것이므로 무시하고 지나감
+              writer.writeLine(generateValueReader(JsonElemType))
+            } else {
+              checkNotNull(obj.rest.fieldType) { "rest field type is mandatory" }
+              val valueReader = generateValueReader(obj.rest.fieldType)
+              writer.writeLine("check($nameVar !in _${obj.rest.name}) { \"Duplicate field: $nameVar\" }")
+              writer.writeLine("_${obj.rest.name}[$nameVar] = $valueReader")
+            }
           }
         }
         writer.writeLine("}")
@@ -125,6 +145,38 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     }
     writer.writeLine("}")
     writer.writeLine("reader.endObject()")
+  }
+
+  fun generateArrayReader(obj: JsonArrayReader) {
+    writer.writeLine("reader.beginArray()")
+    obj.elems.forEach { elem ->
+      when (elem) {
+        is JsonObjectField -> {
+          generateFieldReader(elem)
+        }
+
+        is JsonSubReader ->
+          generateReader(elem.sub)
+      }
+    }
+
+    obj.rest?.let { rest ->
+      if (rest.name == null) {
+        // 배열 끝까지 그냥 consume
+        TODO()
+      } else {
+        // restVarName은 reader body 첫부분에서 이미 정의되었음
+        val restVarName = "_${rest.name}"
+        checkNotNull(rest.fieldType)
+        writer.writeLine("while (reader.hasNext()) {")
+        writer.indent {
+          val value = generateValueReader(rest.fieldType)
+          writer.writeLine("$restVarName.add($value)")
+        }
+        writer.writeLine("}")
+      }
+    }
+    writer.writeLine("reader.endArray()")
   }
 
   fun generateFieldReader(field: JsonObjectField) {
@@ -154,6 +206,10 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     StringType -> "reader.nextString()"
     FloatType -> "reader.nextFloat()"
     DoubleType -> "reader.nextDouble()"
+    JsonElemType -> {
+      writer.addImport(KtImport("com.google.gson.JsonElement"))
+      "gson.fromJson(reader, JsonElement::class.java)"
+    }
 
     is ArrayType -> {
       varIdCounter += 1
@@ -168,6 +224,22 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
       writer.writeLine("}")
       writer.writeLine("reader.endArray()")
       arrayVar
+    }
+
+    is StringToValueType -> {
+      // TODO 이 코드가 실행될 수가 있나?
+      varIdCounter += 1
+      val mapVar = "map$varIdCounter"
+      val valueType = generateFieldTypeStr(type.valueType)
+      writer.writeLine("val $mapVar = mutableMapOf<String, $valueType>()")
+      writer.writeLine("reader.beginArray()")
+      writer.writeLine("while (reader.hasNext()) {")
+      writer.indent {
+        TODO()
+      }
+      writer.writeLine("}")
+      writer.writeLine("reader.endArray()")
+      mapVar
     }
 
     is JsonClassType -> {
@@ -188,6 +260,11 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     StringType -> "String"
     FloatType -> "Float"
     DoubleType -> "Double"
+    JsonElemType -> {
+      writer.addImport(KtImport("com.google.gson.JsonElement"))
+      "JsonElement"
+    }
+
     BigIntegerType -> {
       writer.addImport(KtImport("java.math.BigInteger"))
       "BigInteger"
@@ -198,9 +275,8 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
       "BigDecimal"
     }
 
-    is ArrayType -> {
-      "List<${generateFieldTypeStr(type.elemType)}>"
-    }
+    is ArrayType -> "List<${generateFieldTypeStr(type.elemType)}>"
+    is StringToValueType -> "Map<String, ${generateFieldTypeStr(type.valueType)}>"
 
     is JsonClassType -> type.className
     is JvmType -> {
@@ -209,52 +285,89 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     }
   }
 
-  fun generateBuilderTypeStr(type: FieldType): String = when (type) {
-    BooleanType -> "Boolean"
-    IntType -> "Int"
-    LongType -> "Long"
-    StringType -> "String"
-    FloatType -> "Float"
-    DoubleType -> "Double"
-    BigIntegerType -> {
-      writer.addImport(KtImport("java.math.BigInteger"))
-      "BigInteger"
-    }
-
-    BigDecimalType -> {
-      writer.addImport(KtImport("java.math.BigDecimal"))
-      "BigDecimal"
-    }
-
-    is ArrayType -> {
-      "MutableList<${generateFieldTypeStr(type.elemType)}>"
-    }
-
-    is JsonClassType -> type.className
-    is JvmType -> {
-      writer.addImport(KtImport(type.qualifiedName))
-      type.className
+  fun generateReader(reader: JsonReader) {
+    when (reader) {
+      is JsonObjectReader -> generateObjectReader(reader)
+      is JsonArrayReader -> generateArrayReader(reader)
     }
   }
 
-  fun generateObjectWriter(obj: JsonObject) {
+  fun generateWriter(reader: JsonReader) {
+    when (reader) {
+      is JsonObjectReader -> generateObjectWriter(reader)
+      is JsonArrayReader -> generateArrayWriter(reader)
+    }
+  }
+
+  fun strLiteral(value: String) = "\"$value\""
+
+  fun generateObjectWriter(obj: JsonObjectReader) {
     writer.writeLine("writer.beginObject()")
     obj.fields.forEach { field ->
       if (field.isOptional) {
         writer.writeLine("if (value.${field.kotlinName} != null) {")
         writer.indent {
-          // TODO escape
-          writer.writeLine("writer.name(\"${field.jsonNames.first()}\")")
+          writer.writeLine("writer.name(${strLiteral(field.jsonNames.first())})")
           generateFieldWriter(field)
         }
         writer.writeLine("}")
       } else {
-        // TODO escape
-        writer.writeLine("writer.name(\"${field.jsonNames.first()}\")")
+        writer.writeLine("writer.name(${strLiteral(field.jsonNames.first())})")
         generateFieldWriter(field)
       }
     }
+    obj.subObjs.forEach { subObj ->
+      writer.writeLine("writer.name(${strLiteral(subObj.jsonNames.first())})")
+      generateWriter(subObj.sub)
+    }
+    obj.rest?.let { rest ->
+      if (rest.name != null) {
+        checkNotNull(rest.fieldType)
+        varIdCounter += 1
+        val keyVar = "key$varIdCounter"
+        val valVar = "value$varIdCounter"
+        writer.writeLine("value.${rest.name}.forEach { $keyVar, $valVar ->")
+        writer.indent {
+          writer.writeLine("writer.name($keyVar)")
+          generateValueWriter(valVar, rest.fieldType)
+        }
+        writer.writeLine("}")
+      }
+    }
     writer.writeLine("writer.endObject()")
+  }
+
+  fun generateArrayWriter(obj: JsonArrayReader) {
+    writer.writeLine("writer.beginArray()")
+    obj.elems.forEach { elem ->
+      when (elem) {
+        is JsonObjectField -> {
+          if (elem.isOptional) {
+            writer.writeLine("if (value.${elem.kotlinName} != null) {")
+            writer.indent {
+              generateFieldWriter(elem)
+            }
+            writer.writeLine("}")
+          } else {
+            generateFieldWriter(elem)
+          }
+        }
+
+        is JsonSubReader -> TODO()
+      }
+    }
+    obj.rest?.let { rest ->
+      if (rest.name != null) {
+        varIdCounter += 1
+        val elemVar = "elem$varIdCounter"
+        writer.writeLine("value.${rest.name}.forEach { $elemVar ->")
+        writer.indent {
+          generateValueWriter(elemVar, rest.fieldType!!)
+        }
+        writer.writeLine("}")
+      }
+    }
+    writer.writeLine("writer.endArray()")
   }
 
   fun generateFieldWriter(field: JsonObjectField) {
@@ -269,6 +382,8 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
       StringType,
       FloatType,
       DoubleType -> writer.writeLine("writer.value($value)")
+
+      JsonElemType -> writer.writeLine("gson.toJson($value, writer)")
 
       BigIntegerType -> {
         writer.addImport(KtImport("java.math.BigInteger"))
@@ -296,6 +411,21 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
         }
         writer.writeLine("}")
         writer.writeLine("writer.endArray()")
+      }
+
+      is StringToValueType -> {
+        varIdCounter += 1
+        val keyVar = "key$varIdCounter"
+        val valueVar = "val$varIdCounter"
+
+        writer.writeLine("writer.beginObject()")
+        writer.writeLine("$value.forEach { ($keyVar, $valueVar) ->")
+        writer.indent {
+          writer.writeLine("writer.name($keyVar)")
+          generateValueWriter(valueVar, type.valueType)
+        }
+        writer.writeLine("}")
+        writer.writeLine("writer.endObject()")
       }
 
       is JsonClassType -> {

@@ -32,7 +32,8 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
     is JsonTypeAst.ClassDef -> TODO()
     is JsonTypeAst.ClassReaderDef -> TODO()
     is JsonTypeAst.ClassReaderName -> TODO()
-    is JsonTypeAst.ObjDef -> TODO()
+    is JsonTypeAst.ObjObjDef -> TODO()
+    is JsonTypeAst.ArrayObjDef -> TODO()
     is JsonTypeAst.UnionType -> TODO()
   }
 
@@ -89,21 +90,32 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
       fieldMap[field.kotlinName] = field
     }
 
-    private fun compileObjDef(clsName: String, objDef: JsonTypeAst.ObjDef): JsonObject {
+    private fun compileObjDef(clsName: String, objDef: JsonTypeAst.ObjDef): JsonReader =
+      when (objDef) {
+        is JsonTypeAst.ObjObjDef -> compileObjObjDef(clsName, objDef)
+        is JsonTypeAst.ArrayObjDef -> compileArrayObjDef(clsName, objDef)
+      }
+
+    private fun compileObjObjDef(clsName: String, objDef: JsonTypeAst.ObjObjDef): JsonObjectReader {
       val objFields = mutableListOf<JsonObjectField>()
-      val subObjs = mutableListOf<JsonSubObject>()
+      val subObjs = mutableListOf<JsonSubReader>()
       objDef.fields.forEach { field ->
-        val kotlinName = field.nameAs?.name ?: field.objFieldName.names.first().toKtName()
-        check(kotlinName !in fieldMap) { "Duplicate field name: $kotlinName in $clsName" }
+        check(field is JsonTypeAst.ObjField) { "object def cannot have ignore field(_)" }
 
         when (val type = field.typ) {
           is JsonTypeAst.ObjDef -> {
+            check(!field.isVar) { "sub object cannot be var" }
+            check(!field.isOptional) { "sub object cannot be optional" }
             val subObjDef = compileObjDef(clsName, type)
-            subObjs.add(JsonSubObject(field.objFieldName.toStrings(), subObjDef))
+            subObjs.add(JsonSubReader(field.objFieldName.toStrings(), subObjDef))
           }
 
           else -> {
+            val kotlinName = field.nameAs?.name ?: field.objFieldName.names.first().toKtName()
+            check(kotlinName !in fieldMap) { "Duplicate field name: $kotlinName in $clsName" }
+
             val objField = JsonObjectField(
+              isRest = false,
               kotlinName = kotlinName,
               jsonNames = field.objFieldName.toStrings(),
               isOptional = field.isOptional,
@@ -115,12 +127,83 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
           }
         }
       }
-      return JsonObject(objFields, subObjs, null)
+      val restPair = objDef.rest?.let { rest ->
+        val restType = rest.typ?.let { compileType(it) }
+        if (rest.name != null) {
+          checkNotNull(restType) { "rest에 이름이 있으면 type은 반드시 필요" }
+
+          addField(
+            JsonObjectField(
+              isRest = true,
+              rest.name!!.name,
+              listOf(),
+              false,
+              false,
+              StringToValueType(restType)
+            )
+          )
+        }
+        JsonRest(rest.name?.name, restType)
+      }
+      return JsonObjectReader(objFields, subObjs, restPair)
+    }
+
+    private fun compileArrayObjDef(
+      clsName: String,
+      objDef: JsonTypeAst.ArrayObjDef
+    ): JsonArrayReader {
+      val objFields = mutableListOf<JsonArrayElem>()
+      objDef.fields.forEach { field ->
+        when (val type = field.typ) {
+          is JsonTypeAst.ObjDef -> {
+            check(!field.isVar) { "sub object cannot be var" }
+            check(!field.isOptional) { "sub object cannot be optional" }
+            val subObjDef = compileObjDef(clsName, type)
+            objFields.add(JsonSubReader(listOf(), subObjDef))
+          }
+
+          else -> {
+            check(field.nameAs == null)
+            check(field.objFieldName.names.size == 1)
+            val kotlinName = field.objFieldName.names.single().toKtName()
+
+            val objField = JsonObjectField(
+              isRest = false,
+              kotlinName = kotlinName,
+              jsonNames = listOf(),
+              isOptional = field.isOptional,
+              isVar = field.isVar,
+              type = compileType(type)
+            )
+            objFields.add(objField)
+            addField(objField)
+          }
+        }
+      }
+      val restPair = objDef.rest?.let { rest ->
+        val restType = rest.typ?.let { compileType(it) }
+        if (rest.name != null) {
+          checkNotNull(restType) { "rest에 이름이 있으면 type은 반드시 필요" }
+          addField(
+            JsonObjectField(
+              isRest = true,
+              rest.name!!.name,
+              listOf(),
+              false,
+              false,
+              ArrayType(restType)
+            )
+          )
+        }
+        JsonRest(rest.name?.name, restType)
+      }
+      return JsonArrayReader(objFields, restPair)
     }
 
     fun compileType(type: JsonTypeAst.Type): FieldType = when (type) {
       is JsonTypeAst.LongName ->
         when (val name = type.names.single().name) {
+          "Any" -> JsonElemType
           "Boolean" -> BooleanType
           "Int" -> IntType
           "Long" -> LongType
@@ -135,7 +218,9 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
           }
         }
 
-      is JsonTypeAst.ArrayType -> ArrayType(compileType(type.elemType))
+      is JsonTypeAst.ArrayType ->
+        ArrayType(compileType(type.elemType))
+
       is JsonTypeAst.ClassDef ->
         JsonClassType(compileClass(type).name, "")
 
@@ -154,8 +239,10 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
     }
 
     fun String.toLowerCamelCase(): String {
-      val tokens = this.split('_')
-      return (tokens.take(1) + tokens.drop(1)
+      val prefixUnderscores = this.takeWhile { it == '_' }
+      val afterUnderscores = this.drop(prefixUnderscores.length)
+      val tokens = afterUnderscores.split('_')
+      return prefixUnderscores + (tokens.take(1) + tokens.drop(1)
         .map { tok -> tok.replaceFirstChar { it.uppercase() } }).joinToString("")
     }
 

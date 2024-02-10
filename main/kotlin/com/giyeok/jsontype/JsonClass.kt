@@ -8,36 +8,45 @@ data class JsonTypeDefs(
 data class JsonClass(
   val name: String,
   val fields: List<JsonObjectField>,
-  val defaultReader: JsonObject,
-) {
-}
+  val defaultReader: JsonReader,
+)
 
-data class JsonObject(
+sealed class JsonReader
+
+data class JsonObjectReader(
   val fields: List<JsonObjectField>,
-  val subObjs: List<JsonSubObject>,
-  val rest: Pair<String, FieldType>?,
-)
+  val subObjs: List<JsonSubReader>,
+  val rest: JsonRest?,
+): JsonReader()
 
-data class JsonSubObject(
+data class JsonArrayReader(
+  val elems: List<JsonArrayElem>,
+  val rest: JsonRest?,
+): JsonReader()
+
+data class JsonRest(val name: String?, val fieldType: FieldType?)
+
+sealed class JsonArrayElem
+
+data class JsonSubReader(
   val jsonNames: List<String>,
-  val subObj: JsonObject,
-)
-
-data class JsonClassReader(
-  val className: String,
-  val readerName: String,
-  val body: JsonObject,
-)
+  val sub: JsonReader,
+): JsonArrayElem()
 
 data class JsonObjectField(
+  val isRest: Boolean,
   val kotlinName: String,
   val jsonNames: List<String>,
   val isOptional: Boolean,
   val isVar: Boolean,
   val type: FieldType
-) {
+): JsonArrayElem()
 
-}
+data class JsonClassReader(
+  val className: String,
+  val readerName: String,
+  val body: JsonReader,
+)
 
 sealed class FieldType
 
@@ -49,8 +58,10 @@ data object BigDecimalType: FieldType()
 data object StringType: FieldType()
 data object FloatType: FieldType()
 data object DoubleType: FieldType()
+data object JsonElemType: FieldType()
 data class JsonClassType(val className: String, val readerName: String): FieldType()
 data class ArrayType(val elemType: FieldType): FieldType()
+data class StringToValueType(val valueType: FieldType): FieldType()
 data class JvmType(val qualifiedName: String): FieldType() {
   val className get() = qualifiedName.substringAfterLast('.')
 }

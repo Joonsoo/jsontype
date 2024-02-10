@@ -4,6 +4,25 @@ import com.giyeok.jsontype.util.KotlinCodeWriter
 import org.junit.jupiter.api.Test
 
 class JsonTypeCompilerTest {
+
+  fun testCompiler(parsed: JsonTypeAst.Defs) {
+    val compiler = JsonTypeCompiler(parsed.pkg?.name)
+    compiler.compile(parsed.defs)
+
+    val writer = KotlinCodeWriter()
+    compiler.classes.forEach { (name, cls) ->
+      JsonClassCodeGen(writer).generateClass(cls)
+      JsonClassCodeGen(writer).generateClassReader(cls, "", cls.defaultReader)
+    }
+    compiler.classReaders.forEach { (clsName, readers) ->
+      val cls = compiler.classes.getValue(clsName)
+      readers.forEach { (readerName, reader) ->
+        JsonClassCodeGen(writer).generateClassReader(cls, readerName, reader.body)
+      }
+    }
+    println(writer.toString())
+  }
+
   @Test
   fun test() {
     val parsed = JsonTypeParser.parse(
@@ -49,20 +68,47 @@ class JsonTypeCompilerTest {
         }
       """.trimIndent()
     )
-    val compiler = JsonTypeCompiler(parsed.pkg?.name)
-    compiler.compile(parsed.defs)
+    testCompiler(parsed)
+  }
 
-    val writer = KotlinCodeWriter()
-    compiler.classes.forEach { (name, cls) ->
-      JsonClassCodeGen(writer).generateClass(cls)
-      JsonClassCodeGen(writer).generateClassReader(cls, "", cls.defaultReader)
-    }
-    compiler.classReaders.forEach { (clsName, readers) ->
-      val cls = compiler.classes.getValue(clsName)
-      readers.forEach { (readerName, reader) ->
-        JsonClassCodeGen(writer).generateClassReader(cls, readerName, reader.body)
-      }
-    }
-    println(writer.toString())
+  @Test
+  fun test2() {
+    val parsed = JsonTypeParser.parse(
+      """
+        BinanceMinuteCandle [
+          ...as charts: BinanceCandleEntry [
+            openTime: Long,
+            open: BigDecimal,
+            high: BigDecimal,
+            low: BigDecimal,
+            close: BigDecimal,
+            volume: BigDecimal,
+            closeTime: Long,
+            quoteVolume: BigDecimal,
+            tradeCount: Long,
+            takerBaseVolume: BigDecimal,
+            takerQuoteVolume: BigDecimal,
+            _ignore: Any,
+          ]
+        ]
+      """.trimIndent()
+    )
+    testCompiler(parsed)
+  }
+
+  @Test
+  fun test3() {
+    val parsed = JsonTypeParser.parse(
+      """
+        TestRest {
+          market: String,
+          sub: {
+            sub1: String
+          },
+          ... as rest: Any,
+        }
+      """.trimIndent()
+    )
+    testCompiler(parsed)
   }
 }
