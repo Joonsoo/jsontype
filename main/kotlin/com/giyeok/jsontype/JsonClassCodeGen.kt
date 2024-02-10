@@ -201,14 +201,14 @@ class JsonClassCodeGen(val writer: KotlinCodeWriter) {
     BooleanType -> "reader.nextBoolean()"
     IntType -> "reader.nextInt()"
     LongType -> "reader.nextLong()"
-    BigIntegerType -> "gson.fromJson(reader, BigInteger::class.java)"
-    BigDecimalType -> "gson.fromJson(reader, BigDecimal::class.java)"
+    BigIntegerType -> "gson.fromJson<BigInteger>(reader, BigInteger::class.java)"
+    BigDecimalType -> "gson.fromJson<BigDecimal>(reader, BigDecimal::class.java)"
     StringType -> "reader.nextString()"
     FloatType -> "reader.nextFloat()"
     DoubleType -> "reader.nextDouble()"
     JsonElemType -> {
       writer.addImport(KtImport("com.google.gson.JsonElement"))
-      "gson.fromJson(reader, JsonElement::class.java)"
+      "gson.fromJson<JsonElement>(reader, JsonElement::class.java)"
     }
 
     is ArrayType -> {
