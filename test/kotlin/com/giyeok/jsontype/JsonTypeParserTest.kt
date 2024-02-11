@@ -139,7 +139,7 @@ class JsonTypeParserTest {
             tradeCount: Long,
             takerBaseVolume: BigDecimal,
             takerQuoteVolume: BigDecimal,
-            _,
+            _ignore: Any,
           ]
         ]
       """.trimIndent()

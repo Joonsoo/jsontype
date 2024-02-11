@@ -76,7 +76,7 @@ class JsonTypeCompilerTest {
     val parsed = JsonTypeParser.parse(
       """
         BinanceMinuteCandle [
-          ...as charts: BinanceCandleEntry [
+          ...as charts: [BinanceCandleEntry [
             openTime: Long,
             open: BigDecimal,
             high: BigDecimal,
@@ -89,7 +89,7 @@ class JsonTypeCompilerTest {
             takerBaseVolume: BigDecimal,
             takerQuoteVolume: BigDecimal,
             _ignore: Any,
-          ]
+          ]]
         ]
       """.trimIndent()
     )
@@ -105,8 +105,34 @@ class JsonTypeCompilerTest {
           sub: {
             sub1: String
           },
-          ... as rest: Any,
+          ... as rest: {[String]: Any},
         }
+      """.trimIndent()
+    )
+    testCompiler(parsed)
+  }
+
+  @Test
+  fun test4() {
+    val parsed = JsonTypeParser.parse(
+      """
+        type MyEnum = com.giyeok.jsontype.tests.MyEnum
+        
+        ObjRestTest1 {
+          ... as rest: {[String]: String},
+        }
+        
+        ObjMapTest {
+          my_obj: {[String]: String},
+        }
+        
+        ArrayRestTest1 [
+          ... as rest: [String],
+        ]
+        
+        ArrayTest [
+          array: [String],
+        ]
       """.trimIndent()
     )
     testCompiler(parsed)

@@ -15,7 +15,6 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
 
         is JsonTypeAst.ClassDef -> compileClass(def)
         is JsonTypeAst.ClassReaderDef -> {
-          check(def.name.cls.name in classes) { "Reader definition of unknown class ${def.name.cls.name}" }
           classReaders.getOrPut(def.name.cls.name) { mutableMapOf() }[def.name.reader.name] =
             compileClassReader(def)
         }
@@ -35,6 +34,7 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
     is JsonTypeAst.ObjObjDef -> TODO()
     is JsonTypeAst.ArrayObjDef -> TODO()
     is JsonTypeAst.UnionType -> TODO()
+    is JsonTypeAst.MapType -> TODO()
   }
 
   fun compileClass(def: JsonTypeAst.ClassDef): JsonClass {
@@ -100,8 +100,6 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
       val objFields = mutableListOf<JsonObjectField>()
       val subObjs = mutableListOf<JsonSubReader>()
       objDef.fields.forEach { field ->
-        check(field is JsonTypeAst.ObjField) { "object def cannot have ignore field(_)" }
-
         when (val type = field.typ) {
           is JsonTypeAst.ObjDef -> {
             check(!field.isVar) { "sub object cannot be var" }
@@ -129,8 +127,13 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
       }
       val restPair = objDef.rest?.let { rest ->
         val restType = rest.typ?.let { compileType(it) }
+        check(restType == null || restType is MapType) { "obj의 ...는 map type이어야 함" }
         if (rest.name != null) {
           checkNotNull(restType) { "rest에 이름이 있으면 type은 반드시 필요" }
+          restType as MapType
+          if (objFields.isNotEmpty() || subObjs.isNotEmpty()) {
+            check(restType.keyType == StringType) { "obj의 key type은 스트링이어야 함" }
+          }
 
           addField(
             JsonObjectField(
@@ -139,11 +142,13 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
               listOf(),
               false,
               false,
-              StringToValueType(restType)
+              restType
             )
           )
+          JsonObjRestField(rest.name!!.name, restType)
+        } else {
+          JsonObjDisposeRest(restType as MapType?)
         }
-        JsonRest(rest.name?.name, restType)
       }
       return JsonObjectReader(objFields, subObjs, restPair)
     }
@@ -182,6 +187,7 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
       }
       val restPair = objDef.rest?.let { rest ->
         val restType = rest.typ?.let { compileType(it) }
+        check(restType == null || restType is ArrayType) { "array의 ...은 array type이어야 함" }
         if (rest.name != null) {
           checkNotNull(restType) { "rest에 이름이 있으면 type은 반드시 필요" }
           addField(
@@ -191,11 +197,13 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
               listOf(),
               false,
               false,
-              ArrayType(restType)
+              restType
             )
           )
+          JsonArrayRestField(rest.name!!.name, restType as ArrayType)
+        } else {
+          JsonArrayDisposeRest(restType as ArrayType?)
         }
-        JsonRest(rest.name?.name, restType)
       }
       return JsonArrayReader(objFields, restPair)
     }
@@ -220,6 +228,9 @@ class JsonTypeCompiler(val pkg: JsonTypeAst.LongName?) {
 
       is JsonTypeAst.ArrayType ->
         ArrayType(compileType(type.elemType))
+
+      is JsonTypeAst.MapType ->
+        MapType(compileType(type.key), compileType(type.value))
 
       is JsonTypeAst.ClassDef ->
         JsonClassType(compileClass(type).name, "")

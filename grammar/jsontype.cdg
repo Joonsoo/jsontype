@@ -32,11 +32,12 @@ ClassReaderName = Name WS "::" WS Name {ClassReaderName(cls=$0, reader=$4)}
 
 Type: Type = NonUnionType | UnionType
 NonUnionType: NonUnionType
-  = ClassDef | ClassReaderDef | LongName | ClassReaderName | ObjDef | ArrayType
+  = ClassDef | ClassReaderDef | LongName | ClassReaderName | ObjDef | ArrayType | MapType
 UnionType = NonUnionType (WS '|' WS NonUnionType)+ {UnionType(types=[$0] + $1)}
 
 LongName = Name (WS '.' WS Name)* {LongName(names=[$0] + $1)}
 ArrayType = '[' WS Type WS ']' {ArrayType(elemType=$2)}
+MapType = '{' WS '[' WS Type WS ']' WS ':' WS Type WS '}' {MapType(key=$4, value=$10)}
 
 
 StringLiteral = '"' CharElem* '"' {StringLiteral(chars=$1)}
